@@ -253,17 +253,18 @@ jobs:
           EOF
           make defconfig 1>/dev/null 2>&1
 
-      # - name: 修改 Makefile
-      #   if:  (env.REBUILD_TZST == 'true' || env.REBUILD_TAR == 'true') && !cancelled()
-      #   id: etch_img
-      #   run: |
-      #       cd $OPENWRTROOT
-      #       DEVICE_ARCH_PACKAGES="$(awk -F'"' '/^CONFIG_TARGET_ARCH_/{print $2}' .config)"
-      #       mkdir -p staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl
-      #       touch staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl/.prepared
-      #       sed -i '/tools\/Makefile/d' Makefile
-      #       sed -i 's/ $(tools\/stamp-compile)//;s/ $(tools\/stamp-check)//' Makefile
-      #       #sed -i 's/ $(tool.*\/stamp-compile)//;s/ $(tool.*\/stamp-install)//' Makefile
+      - name: 修改 Makefile
+        if:  (env.REBUILD_TZST == 'true' || env.REBUILD_TAR == 'true') && !cancelled()
+        id: etch_img
+        run: |
+            cd $OPENWRTROOT
+            DEVICE_ARCH_PACKAGES="$(awk -F'"' '/^CONFIG_TARGET_ARCH_/{print $2}' .config)"
+            mkdir -p staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl
+            touch staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl/.prepared
+            cp -v Makefile _Makefile
+            # sed -i '/tools\/Makefile/d' Makefile
+            # sed -i 's/ $(tools\/stamp-compile)//;s/ $(tools\/stamp-check)//' Makefile
+            sed -i 's/ $(tool.*\/stamp-compile)//;s/ $(tool.*\/stamp-install)//' Makefile
 
       - name: 编译 (${{ env.TARGET_INFO }}-${{ env.TOOLS_PM }})-Tools/toolchain
         if: steps.config.conclusion == 'success' && !cancelled()
@@ -287,6 +288,7 @@ jobs:
         run: |
           [ -d output ] || mkdir output
           cd $OPENWRTROOT
+          [ -f _Makefile ] && mv _Makefile Makefile
           du -h --max-depth=1 ./ --exclude=build_dir --exclude=staging_dir
           du -h --max-depth=1 ./build_dir
           du -h --max-depth=1 ./staging_dir
