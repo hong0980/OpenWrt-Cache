@@ -288,7 +288,7 @@ jobs:
         run: |
           [ -d output ] || mkdir output
           cd $OPENWRTROOT
-          [ -f _Makefile ] && mv _Makefile Makefile
+          [ -f _Makefile ] && mv -f _Makefile Makefile
           du -h --max-depth=1 ./ --exclude=build_dir --exclude=staging_dir
           du -h --max-depth=1 ./build_dir
           du -h --max-depth=1 ./staging_dir
