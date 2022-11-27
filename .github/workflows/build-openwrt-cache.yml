@@ -274,15 +274,15 @@ jobs:
         if:  (env.REBUILD_TOOLS == 'tar' || env.REBUILD_TOOLS == 'tzst') && !cancelled()
         run: |
             cd $OPENWRTROOT
-            cp -v Makefile _Makefile
-            # sed -i '/tools\/Makefile/d' Makefile
-            # sed -i 's/ $(tools\/stamp-compile)//;s/ $(tools\/stamp-check)//' Makefile
-            sed -i 's/ $(tool.*\/stamp-compile)//;s/ $(tool.*\/stamp-install)//' Makefile
+            cp Makefile _Makefile
+            sed -i '/tools\/Makefile/d' Makefile
+            sed -i 's/ $(tools\/stamp-compile)//;s/ $(tools\/stamp-check)//' Makefile
+            #sed -i 's/ $(tool.*\/stamp-compile)//;s/ $(tool.*\/stamp-install)//' Makefile
             DEVICE_ARCH_PACKAGES=`awk -F'"' '/^CONFIG_TARGET_ARCH_/{print $2}' .config`
             mkdir -p staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl
             touch staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl/.prepared
 
-      - name: 编译 (${{ env.TARGET_INFO }}-${{ env.TOOLS_PM }})-Tools/toolchain
+      - name: 编译 ${{ env.TARGET_INFO }}-${{ env.TOOLS_PM }}-Tools/Toolchain
         if: steps.config.conclusion == 'success' && !cancelled()
         id: tools
         run: |
