@@ -120,7 +120,6 @@ jobs:
       #     echo "======================="
 
       - name: 比较Tools
-        id: hash
         run: |
           export CURRENT_TOOLS_HASH=$(curl -fSLs \
             $GITHUB_API_URL/repos/$SOURCE_USER/$SOURCE_NAME/commits\?sha\=$SOURCE_BRANCH\&path\=tools | jq -r '.[0] | .sha')
@@ -136,21 +135,21 @@ jobs:
             curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.$TOOLS_PM" || {
               if [ "$TOOLS_PM" = tar ]; then
                 if curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tzst"; then
-                  echo "REBUILD_TZST=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                  echo "REBUILD_TOOLS=tzst" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
                 elif curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.img"; then
-                  echo "REBUILD_IMG=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                  echo "REBUILD_TOOLS=img" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
                 fi
               elif [ "$TOOLS_PM" = tzst ]; then
                 if curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tar.xz"; then
-                  echo "REBUILD_TAR=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                  echo "REBUILD_TOOLS=tar" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
                 elif curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.img"; then
-                  echo "REBUILD_IMG=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                  echo "REBUILD_TOOLS=img" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
                 fi
               elif [ "$TOOLS_PM" = img ]; then
                 if curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tzst"; then
-                  echo "REBUILD_TZST=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                  echo "REBUILD_TOOLS=tzst" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
                 elif curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tar.xz"; then
-                  echo "REBUILD_TAR=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                  echo "REBUILD_TOOLS=tar" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
                 fi
               fi
             }
@@ -158,7 +157,7 @@ jobs:
           fi
 
       - name: 拉取源码
-        if: (env.REBUILD_TOOLS == 'true' || env.REBUILD_TZST == 'true' || env.REBUILD_TAR == 'true') && !cancelled()
+        if: (env.REBUILD_TOOLS == 'true' || env.REBUILD_TOOLS == 'tar' || env.REBUILD_TOOLS == 'tzst') && !cancelled()
         id: clone
         run: |
           git clone -q $SOURCE_URL -b $SOURCE_BRANCH $OPENWRTROOT --single-branch
@@ -167,8 +166,8 @@ jobs:
         if: env.REBUILD_TOOLS != 'true' && !cancelled()
         id: fetch
         run: |
-          cat -n $(echo $0)
-          if [ "$REBUILD_IMG" = true ]; then
+          #cat -n $(echo $0)
+          if [ "$REBUILD_TOOLS" = img ]; then
             echo "解压 img"
             if wget -qc -t=3 $DOWNLOAD_URL-$PLATFORM-cache.img; then
               mkdir -p openwrt-ro $OPENWRTROOT workdir overlay
@@ -177,7 +176,7 @@ jobs:
               sudo chown runner:runner $OPENWRTROOT
             fi
           fi
-          if [ "$REBUILD_TAR" = true ]; then
+          if [ "$REBUILD_TOOLS" = tar ]; then
             cd $OPENWRTROOT
             rm -rf build_dir staging_dir
             echo "解压 tar"
@@ -189,7 +188,7 @@ jobs:
               fi
             fi
           fi
-          if [ "$REBUILD_TZST" = true ]; then
+          if [ "$REBUILD_TOOLS" = tzst ]; then
             cd $OPENWRTROOT
             rm -rf build_dir staging_dir
             echo "解压 tzst"
@@ -242,6 +241,24 @@ jobs:
           CONFIG_TARGET_ramips_mt7621_DEVICE_d-team_newifi-d2=y
           EOF
           ;;
+          "ath79-nand")
+          cat <<-EOF> .config
+          CONFIG_TARGET_ath79=y
+          CONFIG_TARGET_ath79_nand=y
+          CONFIG_TARGET_ath79_nand_DEVICE_domywifi_dw33d=y
+          EOF
+          ;;
+          "bcm27xx-bcm2711")
+          cat <<-EOF> .config
+          CONFIG_TARGET_bcm27xx=y
+          CONFIG_TARGET_bcm27xx_bcm2711=y
+          CONFIG_TARGET_bcm27xx_bcm2711_DEVICE_rpi-4=y
+          CONFIG_PACKAGE_kmod-ath11k=n
+          CONFIG_IB=y
+          CONFIG_IB_STANDALONE=y
+          CONFIG_IMAGEOPT=y
+          EOF
+          ;;
           esac
           cat<<-EOF>>.config
           CONFIG_DEVEL=y
@@ -254,7 +271,7 @@ jobs:
           make defconfig 1>/dev/null 2>&1
 
       - name: 修改 Makefile
-        if:  (env.REBUILD_TZST == 'true' || env.REBUILD_TAR == 'true') && !cancelled()
+        if:  (env.REBUILD_TOOLS == 'tar' || env.REBUILD_TOOLS == 'tzst') && !cancelled()
         id: etch_img
         run: |
             cd $OPENWRTROOT
