@@ -141,15 +141,15 @@ jobs:
                   echo "REBUILD_IMG=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
                 fi
               elif [ "$TOOLS_PM" = tzst ]; then
-                if curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.img"; then
-                  echo "REBUILD_IMG=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
-                elif curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tar"; then
+                if curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tar.xz"; then
                   echo "REBUILD_TAR=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                elif curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.img"; then
+                  echo "REBUILD_IMG=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
                 fi
               elif [ "$TOOLS_PM" = img ]; then
                 if curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tzst"; then
                   echo "REBUILD_TZST=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
-                elif curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tar"; then
+                elif curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tar.xz"; then
                   echo "REBUILD_TAR=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
                 fi
               fi
@@ -167,7 +167,7 @@ jobs:
         if: env.REBUILD_TOOLS != 'true' && !cancelled()
         id: fetch
         run: |
-          #cat -n $(echo $0)
+          cat -n $(echo $0)
           if [ "$REBUILD_IMG" = true ]; then
             echo "解压 img"
             if wget -qc -t=3 $DOWNLOAD_URL-$PLATFORM-cache.img; then
@@ -182,9 +182,11 @@ jobs:
             rm -rf build_dir staging_dir
             echo "解压 tar"
             if wget -qc -t=3 $DOWNLOAD_URL-$PLATFORM-cache.tar.xz; then
-              [ -f scripts/ext-tools.sh ] && \
-              ./scripts/ext-tools.sh --tools *cache.tar.xz && rm *.xz || \
-              tar -xf *cache.tar.xz && rm *.xz
+              if [ -f scripts/ext-tools.sh ]; then
+               ./scripts/ext-tools.sh --tools *cache.tar.xz && rm *.xz
+              else
+                tar -xf *cache.tar.xz && rm *.xz
+              fi
             fi
           fi
           if [ "$REBUILD_TZST" = true ]; then
