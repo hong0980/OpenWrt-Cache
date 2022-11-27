@@ -1,0 +1,332 @@
+#=================================================
+# https://github.com/P3TERX/Actions-OpenWrt
+# Description: Build OpenWrt using GitHub Actions
+# Lisence: MIT
+# Author: P3TERX, SuLingGG
+# Blog: https://p3terx.com
+#=================================================
+
+name: 编译 Tools/Toolchain
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: '选择仓库：lean或immortalwrt'
+        default: 'lean'
+        required: true
+        type: choice
+        options: [ 'https://github.com/coolsnowwolf/lede', 'https://github.com/immortalwrt/immortalwrt' ]
+      branch:
+        description: '选择分支：（只适用ImmortalWrt仓库）'
+        default: 'master'
+        required: true
+        type: choice
+        options: [ openwrt-18.06-k5.4, openwrt-21.02, master, openwrt-18.06 ]
+      tools_pm:
+        description: 'Tools打包方式选择：'
+        default: 'tar'
+        required: true
+        type: choice
+        options: [ tar, tzst, img ]
+  #schedule:
+  #  - cron: 0 2 * * *
+
+env:
+  OPENWRTROOT: openwrt
+  RELEASE_BRANCH: master
+  RELEASE_TAG: toolchain_tools_cache
+  TOOLS_PM: ${{ github.event.inputs.tools_pm }}
+  SOURCE_BRANCH: ${{ github.event.inputs.branch }}
+  SOURCE_URL: ${{ github.event.inputs.source_url }}
+
+jobs:
+  Build_Tools:
+    name: 编译 Tools/Toolchain
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        PLATFORM: [ x86-64, ramips-mt7621, rockchip-armv8 ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+
+      - name: 初始化环境
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          PLATFORM: ${{ matrix.PLATFORM }}
+        run: |
+          nohup sh -c '
+          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo -E apt-get -qq update
+          sudo -E apt-get -qq install tzdata $(curl -fsSL git.io/depends-ubuntu-2004) libfuse-dev jq rdate
+          sudo -E apt-get -qq autoremove --purge
+          sudo -E apt-get -qq clean
+          sudo -E docker image prune -a -f
+          sudo ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+          sudo dpkg-reconfigure -f noninteractive tzdata
+          ' &
+          export SOURCE_NAME=$(awk -F/ '{print $(NF)}' <<<$SOURCE_URL)
+          export SOURCE_USER=$(awk -F/ '{print $(NF-1)}' <<<$SOURCE_URL)
+          export TARGET_INFO=$SOURCE_USER-$SOURCE_NAME-$SOURCE_BRANCH
+          export RELEASE_TAG=$SOURCE_USER-$RELEASE_TAG
+          echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
+          echo "SOURCE_USER=$SOURCE_USER" >> $GITHUB_ENV
+          echo "SOURCE_NAME=$SOURCE_NAME" >> $GITHUB_ENV
+          echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+          echo "TARGET_INFO=$TARGET_INFO" >> $GITHUB_ENV
+          echo "FILE_DATE=$(date +"%Y-%m-%d")" >> $GITHUB_ENV
+          echo "DOWNLOAD_URL=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/$TARGET_INFO" >> $GITHUB_ENV
+      #     echo '${{ toJSON(github) }}' > /tmp/reviewers.json
+      #     echo '${{ toJSON(github.event.repository.full_name) }}'
+      #     jq -r '.event.repository.html_url' /tmp/reviewers.json
+
+      # - name: 整理磁盘
+      #   run: |
+      #     sudo swapoff -a
+      #     sudo rm -f /mnt/swapfile
+      #     export ROOT_FREE_KB=$(df --block-size=1024 --output=avail / | tail -1)
+      #     export ROOT_LOOP_KB=$(expr $ROOT_FREE_KB - 1048576)
+      #     export ROOT_LOOP_BYTES=$(expr $ROOT_LOOP_KB \* 1024)
+      #     sudo fallocate -l $ROOT_LOOP_BYTES /root.img
+      #     export ROOT_LOOP_DEVNAME=$(sudo losetup -Pf --show /root.img)
+      #     sudo pvcreate -f $ROOT_LOOP_DEVNAME
+      #     export MNT_FREE_KB=$(df --block-size=1024 --output=avail /mnt | tail -1)
+      #     export MNT_LOOP_KB=$(expr $MNT_FREE_KB - 102400)
+      #     export MNT_LOOP_BYTES=$(expr $MNT_LOOP_KB \* 1024)
+      #     sudo fallocate -l $MNT_LOOP_BYTES /mnt/mnt.img
+      #     export MNT_LOOP_DEVNAME=$(sudo losetup -Pf --show /mnt/mnt.img)
+      #     sudo pvcreate -f $MNT_LOOP_DEVNAME
+      #     sudo vgcreate vgstorage $ROOT_LOOP_DEVNAME $MNT_LOOP_DEVNAME
+      #     sudo lvcreate -n lvstorage -l 100%FREE vgstorage
+      #     export LV_DEVNAME=$(sudo lvscan | awk -F "'" '{print $2}')
+      #     sudo mkfs.btrfs -L combinedisk $LV_DEVNAME
+      #     sudo mount -o compress=zstd $LV_DEVNAME $GITHUB_WORKSPACE
+      #     sudo chown -R runner:runner $GITHUB_WORKSPACE
+      #     mkdir -p $GITHUB_WORKSPACE/tmp
+      #     chmod 777 $GITHUB_WORKSPACE/tmp
+      #     sudo cp -rp /tmp/* $GITHUB_WORKSPACE/tmp || true
+      #     sudo mount -B $GITHUB_WORKSPACE/tmp /tmp
+
+      # - name: 磁盘信息
+      #   run: |
+      #     sudo btrfs filesystem usage $GITHUB_WORKSPACE
+      #     echo "======================="
+      #     echo "磁盘使用情况:"
+      #     echo "======================="
+      #     df -hT
+      #     echo "======================="
+
+      - name: 比较Tools
+        id: hash
+        run: |
+          export CURRENT_TOOLS_HASH=$(curl -fSLs \
+            $GITHUB_API_URL/repos/$SOURCE_USER/$SOURCE_NAME/commits\?sha\=$SOURCE_BRANCH\&path\=tools | jq -r '.[0] | .sha')
+          echo "CURRENT_TOOLS_HASH is $CURRENT_TOOLS_HASH"
+          echo "CURRENT_TOOLS_HASH=$CURRENT_TOOLS_HASH" >> $GITHUB_ENV
+          export CACHE_TOOLS_HASH=$(curl -fSLs $DOWNLOAD_URL-cache.txt 2>/dev/null)
+          echo "CACHE_TOOLS_HASH is $CACHE_TOOLS_HASH"
+          echo "CACHE_TOOLS_HASH=$CACHE_TOOLS_HASH" >> $GITHUB_ENV
+          if [ -z "$CACHE_TOOLS_HASH" ] || [ "$CURRENT_TOOLS_HASH" != "$CACHE_TOOLS_HASH" ]; then
+            echo "CURRENT_TOOLS_HASH != CACHE_TOOLS_HASH"
+            echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+          else
+            curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.$TOOLS_PM" || {
+              if [ "$TOOLS_PM" = tar ]; then
+                if curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tzst"; then
+                  echo "REBUILD_TZST=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                elif curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.img"; then
+                  echo "REBUILD_IMG=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                fi
+              elif [ "$TOOLS_PM" = tzst ]; then
+                if curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.img"; then
+                  echo "REBUILD_IMG=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                elif curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tar"; then
+                  echo "REBUILD_TAR=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                fi
+              elif [ "$TOOLS_PM" = img ]; then
+                if curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tzst"; then
+                  echo "REBUILD_TZST=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                elif curl -Ls $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases | grep -qo "$DOWNLOAD_URL-$PLATFORM-cache.tar"; then
+                  echo "REBUILD_TAR=true" >> $GITHUB_ENV || echo "REBUILD_TOOLS=true" >> $GITHUB_ENV
+                fi
+              fi
+            }
+            echo "CURRENT_TOOLS_HASH = CACHE_TOOLS_HASH"
+          fi
+
+      - name: 拉取源码
+        if: (env.REBUILD_TOOLS == 'true' || env.REBUILD_TZST == 'true' || env.REBUILD_TAR == 'true') && !cancelled()
+        id: clone
+        run: |
+          git clone -q $SOURCE_URL -b $SOURCE_BRANCH $OPENWRTROOT --single-branch
+
+      - name: 解压 cache
+        if: env.REBUILD_TOOLS != 'true' && !cancelled()
+        id: fetch
+        run: |
+          #cat -n $(echo $0)
+          if [ "$REBUILD_IMG" = true ]; then
+            echo "解压 img"
+            if wget -qc -t=3 $DOWNLOAD_URL-$PLATFORM-cache.img; then
+              mkdir -p openwrt-ro $OPENWRTROOT workdir overlay
+              sudo mount -o loop $TARGET_INFO-$PLATFORM-cache.img openwrt-ro
+              sudo mount -t overlay overlay -o lowerdir=openwrt-ro,upperdir=overlay,workdir=workdir $OPENWRTROOT
+              sudo chown runner:runner $OPENWRTROOT
+            fi
+          fi
+          if [ "$REBUILD_TAR" = true ]; then
+            cd $OPENWRTROOT
+            rm -rf build_dir staging_dir
+            echo "解压 tar"
+            if wget -qc -t=3 $DOWNLOAD_URL-$PLATFORM-cache.tar.xz; then
+              [ -f scripts/ext-tools.sh ] && \
+              ./scripts/ext-tools.sh --tools *cache.tar.xz && rm *.xz || \
+              tar -xf *cache.tar.xz && rm *.xz
+            fi
+          fi
+          if [ "$REBUILD_TZST" = true ]; then
+            cd $OPENWRTROOT
+            rm -rf build_dir staging_dir
+            echo "解压 tzst"
+            curl -sL https://raw.githubusercontent.com/klever1988/nanopi-openwrt/zstd-bin/zstd | sudo tee /usr/bin/zstd > /dev/null
+            if wget -qc -t=3 $DOWNLOAD_URL-$PLATFORM-cache.tzst; then
+              if [ -f scripts/ext-tools.sh ]; then
+                sed -i 's/tar -x/tar --use-compress-program unzstd -x/' scripts/ext-tools.sh
+                ./scripts/ext-tools.sh --tools *cache.tzst && rm *.tzst
+              else
+                tar --use-compress-program unzstd -xf *cache.tzst && rm *.tzst
+              fi
+            fi
+          fi
+
+      - name: 更新软件
+        if: (steps.clone.conclusion == 'success' || steps.fetch.conclusion == 'success') && !cancelled()
+        id: feeds
+        run: |
+          cd $OPENWRTROOT
+          git pull
+          ./scripts/feeds update -a 1>/dev/null 2>&1
+          ./scripts/feeds install -a 1>/dev/null 2>&1
+
+      - name: 生成配置
+        if: steps.feeds.conclusion == 'success' && !cancelled()
+        id: config
+        run: |
+          cd $OPENWRTROOT
+          case "$PLATFORM" in
+          "rockchip-armv8")
+          cat >.config <<-EOF
+          CONFIG_TARGET_rockchip=y
+          CONFIG_TARGET_rockchip_armv8=y
+          CONFIG_TARGET_rockchip_armv8_DEVICE_xunlong_orangepi-r1-plus-lts=y
+          CONFIG_PACKAGE_kmod-ath11k=n
+          EOF
+          ;;
+          "x86-64")
+          cat>.config<<-EOF
+          CONFIG_TARGET_x86=y
+          CONFIG_TARGET_x86_64=y
+          CONFIG_TARGET_x86_64_DEVICE_generic=y
+          CONFIG_PACKAGE_kmod-ath11k=n
+          EOF
+          ;;
+          "ramips-mt7621")
+          cat <<-EOF> .config
+          CONFIG_TARGET_ramips=y
+          CONFIG_TARGET_ramips_mt7621=y
+          CONFIG_TARGET_ramips_mt7621_DEVICE_d-team_newifi-d2=y
+          EOF
+          ;;
+          esac
+          cat<<-EOF>>.config
+          CONFIG_DEVEL=y
+          CONFIG_CCACHE=y
+          CONFIG_BUILD_LOG=y
+          CONFIG_AUTOREMOVE=y
+          CONFIG_MAKE_TOOLCHAIN=y
+          CONFIG_BUILD_LOG_DIR="./logs"
+          EOF
+          make defconfig 1>/dev/null 2>&1
+
+      # - name: 修改 Makefile
+      #   if:  (env.REBUILD_TZST == 'true' || env.REBUILD_TAR == 'true') && !cancelled()
+      #   id: etch_img
+      #   run: |
+      #       cd $OPENWRTROOT
+      #       DEVICE_ARCH_PACKAGES="$(awk -F'"' '/^CONFIG_TARGET_ARCH_/{print $2}' .config)"
+      #       mkdir -p staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl
+      #       touch staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl/.prepared
+      #       sed -i '/tools\/Makefile/d' Makefile
+      #       sed -i 's/ $(tools\/stamp-compile)//;s/ $(tools\/stamp-check)//' Makefile
+      #       #sed -i 's/ $(tool.*\/stamp-compile)//;s/ $(tool.*\/stamp-install)//' Makefile
+
+      - name: 编译 (${{ env.TARGET_INFO }}-${{ env.TOOLS_PM }})-Tools/toolchain
+        if: steps.config.conclusion == 'success' && !cancelled()
+        id: tools
+        run: |
+          cd $OPENWRTROOT
+          #make tools/install -j$(($(nproc)+1)) || make tools/install -j1 V=s
+          make toolchain/install -j$(($(nproc)+1)) || make toolchain/install -j1 V=s
+          make target/toolchain/install -j$(($(nproc)+1))
+
+      - name: 上传错误日志
+        uses: actions/upload-artifact@v3
+        if: steps.tools.conclusion == 'failure' && !cancelled()
+        with:
+          name: Logs_Tools_${{ env.FILE_DATE }}
+          path: ${{ env.OPENWRTROOT }}/logs
+
+      - name: tar 打包
+        id: organize_tar
+        if: steps.tools.conclusion == 'success' && (env.TOOLS_PM == 'tar' || env.TOOLS_PM == 'tzst') && !cancelled()
+        run: |
+          [ -d output ] || mkdir output
+          cd $OPENWRTROOT
+          du -h --max-depth=1 ./ --exclude=build_dir --exclude=staging_dir
+          du -h --max-depth=1 ./build_dir
+          du -h --max-depth=1 ./staging_dir
+          curl -sL https://raw.githubusercontent.com/klever1988/nanopi-openwrt/zstd-bin/zstd | sudo tee /usr/bin/zstd > /dev/null
+          [ "$TOOLS_PM" = tar ] && tar --mtime=now -Jcf ../output/$TARGET_INFO-$PLATFORM-cache.tar.xz staging_dir/host* staging_dir/tool* .ccache || \
+            tar --posix --use-compress-program zstdmt -cf ../output/$TARGET_INFO-$PLATFORM-cache.tzst staging_dir/host* staging_dir/tool* .ccache
+          echo $CURRENT_TOOLS_HASH > ../output/$TARGET_INFO-cache.txt
+          ls -lh ../output
+
+      - name: img 打包
+        if: steps.tools.conclusion == 'success' && env.TOOLS_PM == 'img' && !cancelled()
+        id: organize_img
+        run: |
+          [ -d output ] || mkdir output
+          pushd $OPENWRTROOT
+          make clean
+          ./scripts/feeds clean
+          rm -rf .config* bin dl logs tmp
+          popd
+          mksquashfs $OPENWRTROOT output/$TARGET_INFO-$PLATFORM-cache.img -force-gid 1001 -force-uid 1001 -comp zstd
+          echo $CURRENT_TOOLS_HASH > output/$TARGET_INFO-cache.txt
+          ls -lh output
+
+      - name: 上传到Release
+        if: (steps.organize_img.conclusion == 'success' || steps.organize_tar.conclusion == 'success') && !cancelled()
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: output/*
+          tag: ${{ env.RELEASE_TAG }}
+          commit: ${{ env.RELEASE_BRANCH }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ env.SOURCE_USER }}-cache
+
+      - name: 磁盘使用信息
+        if: (steps.organize_img.conclusion == 'success' || steps.organize_tar.conclusion == 'success') && !cancelled()
+        run: |
+          #sudo btrfs filesystem usage $GITHUB_WORKSPACE
+          echo "======================="
+          echo "磁盘使用情况:"
+          echo "======================="
+          df -hT
+          echo "======================="
+          export -p

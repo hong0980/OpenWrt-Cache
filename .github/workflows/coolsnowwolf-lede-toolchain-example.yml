@@ -1,0 +1,96 @@
+#=================================================
+# https://github.com/P3TERX/Actions-OpenWrt
+# Description: Build OpenWrt using GitHub Actions
+# Lisence: MIT
+# Author: P3TERX
+# Blog: https://p3terx.com
+#=================================================
+
+name: Coolsnowwolf/Lede Toolchain Example
+on:
+  workflow_dispatch:
+#  schedule:
+#    - cron: 0 18 * * *
+#  watch:
+#    types: started
+
+env:
+  SOURCE_URL: https://github.com/coolsnowwolf/lede
+  SOURCE_BRANCH: master
+  TOOLCHAIN_REPO: SuLingGG/OpenWrt-Cache
+  TOOLCHAIN_NAME: coolsnowwolf-lede-master-bcm27xx-bcm2711.tar.xz
+  TOOLCHAIN_TAG: toolchain
+  TZ: Asia/Shanghai
+
+jobs:
+  Build:
+    runs-on: ubuntu-18.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+
+      - name: Initialization Environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo -E apt-get -qq update
+          sudo -E apt-get -qq install $(curl -fsSL git.io/depends-ubuntu-1804)
+          sudo -E apt-get -qq autoremove --purge
+          sudo -E apt-get -qq clean
+          sudo ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+      - name: Prepare OpenWrt Source
+        id: prepare
+        run: |
+          git clone $SOURCE_URL -b $SOURCE_BRANCH openwrt
+          cd openwrt
+          echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Download Packages
+        id: download
+        run: |
+          mv -f config/bcm27xx/bcm2711.config $OPENWRTROOT/.config
+          cd $OPENWRTROOT
+          make defconfig
+          make download -j16
+          find dl -size -1024c -exec ls -l {} \;
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: Prepare Cached Toolchain
+        id: toolchain
+        run: |
+          cd $OPENWRTROOT
+          export CURRENT_HASH=$(git log --pretty=tformat:"%h" -n1 tools toolchain)
+          echo "CURRENT_HASH is $CURRENT_HASH"
+          export CACHE_HASH=$(curl -fSsL https://github.com/$TOOLCHAIN_REPO/releases/download/$TOOLCHAIN_TAG/cache-hash.txt)
+          echo "CACHE_HASH is $CACHE_HASH"
+          if [ "$CURRENT_HASH" == "$CACHE_HASH" ]; then
+            wget -qc https://github.com/$TOOLCHAIN_REPO/releases/download/$TOOLCHAIN_TAG/$TOOLCHAIN_NAME -O - | tar -xJ
+            sed -i 's/ $(tool.*\/stamp-compile)//;' Makefile
+          fi
+
+      - name: Compile Firmware
+        id: compile
+        run: |
+          cd $OPENWRTROOT
+          echo -e "$(nproc) thread compile"
+          make -j$(nproc) || make -j1 V=s
+
+      - name: Organize Files
+        id: organize
+        run: |
+          cd openwrt/bin/targets/*/*
+          rm -rf packages
+          echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+          df -hT $PWD
+
+      - name: Upload Firmware To Artifact
+        id: upload
+        uses: actions/upload-artifact@main
+        with:
+          name: OpenWrt-Firmware
+          path: ${{ env.FIRMWARE }}
