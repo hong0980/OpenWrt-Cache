@@ -272,25 +272,27 @@ jobs:
 
       - name: 修改 Makefile
         if:  (env.REBUILD_TOOLS == 'tar' || env.REBUILD_TOOLS == 'tzst') && !cancelled()
-        id: etch_img
         run: |
             cd $OPENWRTROOT
-            DEVICE_ARCH_PACKAGES="$(awk -F'"' '/^CONFIG_TARGET_ARCH_/{print $2}' .config)"
-            mkdir -p staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl
-            touch staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl/.prepared
             cp -v Makefile _Makefile
             # sed -i '/tools\/Makefile/d' Makefile
             # sed -i 's/ $(tools\/stamp-compile)//;s/ $(tools\/stamp-check)//' Makefile
             sed -i 's/ $(tool.*\/stamp-compile)//;s/ $(tool.*\/stamp-install)//' Makefile
+            DEVICE_ARCH_PACKAGES=`awk -F'"' '/^CONFIG_TARGET_ARCH_/{print $2}' .config`
+            mkdir -p staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl
+            touch staging_dir/target-"$DEVICE_ARCH_PACKAGES"_musl/.prepared
 
       - name: 编译 (${{ env.TARGET_INFO }}-${{ env.TOOLS_PM }})-Tools/toolchain
         if: steps.config.conclusion == 'success' && !cancelled()
         id: tools
         run: |
           cd $OPENWRTROOT
-          #make tools/install -j$(($(nproc)+1)) || make tools/install -j1 V=s
-          make toolchain/install -j$(($(nproc)+1)) || make toolchain/install -j1 V=s
-          make target/toolchain/install -j$(($(nproc)+1))
+          #make tools/install -j$(nproc) || make tools/install -j1 V=s
+          #make toolchain/install -j$(nproc) || make toolchain/install -j1 V=s
+          #make target/toolchain/install -j$(nproc)
+          make tools/compile -j$(nproc) || tools/compile -j1 V=s
+          make toolchain/compile -j$(nproc) || toolchain/compile -j1 V=s
+
 
       - name: 上传错误日志
         uses: actions/upload-artifact@v3
@@ -301,7 +303,7 @@ jobs:
 
       - name: tar 打包
         id: organize_tar
-        if: steps.tools.conclusion == 'success' && (env.TOOLS_PM == 'tar' || env.TOOLS_PM == 'tzst') && !cancelled()
+        if: (env.TOOLS_PM == 'tar' || env.TOOLS_PM == 'tzst') && steps.tools.conclusion == 'success' && !cancelled()
         run: |
           [ -d output ] || mkdir output
           cd $OPENWRTROOT
@@ -309,9 +311,10 @@ jobs:
           du -h --max-depth=1 ./ --exclude=build_dir --exclude=staging_dir
           du -h --max-depth=1 ./build_dir
           du -h --max-depth=1 ./staging_dir
+          [ -d ".ccache" ] && ccache=".ccache"
           curl -sL https://raw.githubusercontent.com/klever1988/nanopi-openwrt/zstd-bin/zstd | sudo tee /usr/bin/zstd > /dev/null
-          [ "$TOOLS_PM" = tar ] && tar --mtime=now -Jcf ../output/$TARGET_INFO-$PLATFORM-cache.tar.xz staging_dir/host* staging_dir/tool* .ccache || \
-            tar --posix --use-compress-program zstdmt -cf ../output/$TARGET_INFO-$PLATFORM-cache.tzst staging_dir/host* staging_dir/tool* .ccache
+          [ "$TOOLS_PM" = tar ] && tar --mtime=now -Jcf ../output/$TARGET_INFO-$PLATFORM-cache.tar.xz staging_dir/host* staging_dir/tool* $ccache || \
+            tar --posix --use-compress-program zstdmt -cf ../output/$TARGET_INFO-$PLATFORM-cache.tzst staging_dir/host* staging_dir/tool* $ccache
           echo $CURRENT_TOOLS_HASH > ../output/$TARGET_INFO-cache.txt
           ls -lh ../output
 
