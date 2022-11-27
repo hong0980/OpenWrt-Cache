@@ -235,7 +235,7 @@ jobs:
           EOF
           ;;
           "ramips-mt7621")
-          cat <<-EOF> .config
+          cat<<-EOF>.config
           CONFIG_TARGET_ramips=y
           CONFIG_TARGET_ramips_mt7621=y
           CONFIG_TARGET_ramips_mt7621_DEVICE_d-team_newifi-d2=y
@@ -288,10 +288,10 @@ jobs:
         run: |
           cd $OPENWRTROOT
           #make tools/install -j$(nproc) || make tools/install -j1 V=s
-          #make toolchain/install -j$(nproc) || make toolchain/install -j1 V=s
-          #make target/toolchain/install -j$(nproc)
-          make tools/compile -j$(nproc) || tools/compile -j1 V=s
-          make toolchain/compile -j$(nproc) || toolchain/compile -j1 V=s
+          make toolchain/install -j$(nproc) || make toolchain/install -j1 V=s
+          make target/toolchain/install -j$(nproc)
+          #make tools/compile -j$(nproc) || tools/compile -j1 V=s
+          #make toolchain/compile -j$(nproc) || toolchain/compile -j1 V=s
 
 
       - name: 上传错误日志
