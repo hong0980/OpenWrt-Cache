@@ -181,13 +181,14 @@ jobs:
             cd $OPENWRTROOT
             rm -rf build_dir staging_dir
             echo "解压 tar"
-            if wget -qc -t=3 $DOWNLOAD_URL-$PLATFORM-cache.tar.xz; then
-              if [ -f scripts/ext-tools.sh ]; then
-               ./scripts/ext-tools.sh --tools *cache.tar.xz && rm *.xz
-              else
-                tar -xf *cache.tar.xz && rm *.xz
-              fi
-            fi
+            # if wget -qc -t=3 $DOWNLOAD_URL-$PLATFORM-cache.tar.xz; then
+            #   if [ -f scripts/ext-tools.sh ]; then
+            #    ./scripts/ext-tools.sh --tools *cache.tar.xz && rm *.xz
+            #   else
+            #     tar -xf *cache.tar.xz && rm *.xz
+            #   fi
+            # fi
+            wget -qc -t=3 $DOWNLOAD_URL-$PLATFORM-cache.tar.xz && tar -xf *cache.tar.xz && rm *.xz
           fi
           if [ "$REBUILD_TOOLS" = tzst ]; then
             cd $OPENWRTROOT
