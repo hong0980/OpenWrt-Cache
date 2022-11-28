@@ -78,6 +78,7 @@ jobs:
           echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
           echo "TARGET_INFO=$TARGET_INFO" >> $GITHUB_ENV
           echo "FILE_DATE=$(date +"%Y-%m-%d")" >> $GITHUB_ENV
+          LOOP_DEVICE=$(losetup -f) && echo "LOOP_DEVICE=$LOOP_DEVICE" >> $GITHUB_ENV
           echo "DOWNLOAD_URL=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/$TARGET_INFO" >> $GITHUB_ENV
           curl -sL https://raw.githubusercontent.com/klever1988/nanopi-openwrt/zstd-bin/zstd | sudo tee /usr/bin/zstd > /dev/null
       #     echo '${{ toJSON(github) }}' > /tmp/reviewers.json
@@ -329,9 +330,8 @@ jobs:
           ./scripts/feeds clean
           rm -rf .config* bin dl logs tmp
           popd
-          sudo losetup -d $(losetup -f)
+          mksquashfs $OPENWRTROOT $REPO_FLODER.img -force-gid 1001 -force-uid 1001 -comp zstd
           zstdmt -c --long $REPO_FLODER.img | split --numeric=1 -b 2000m - output/$TARGET_INFO-$PLATFORM-cache.img.zst.
-          #mksquashfs $OPENWRTROOT output/$TARGET_INFO-$PLATFORM-cache.img -force-gid 1001 -force-uid 1001 -comp zstd
           echo $CURRENT_TOOLS_HASH > output/$TARGET_INFO-cache.txt
           ls -lh output
 
