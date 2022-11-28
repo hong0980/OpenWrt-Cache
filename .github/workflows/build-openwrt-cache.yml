@@ -79,6 +79,7 @@ jobs:
           echo "TARGET_INFO=$TARGET_INFO" >> $GITHUB_ENV
           echo "FILE_DATE=$(date +"%Y-%m-%d")" >> $GITHUB_ENV
           echo "DOWNLOAD_URL=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/$TARGET_INFO" >> $GITHUB_ENV
+          curl -sL https://raw.githubusercontent.com/klever1988/nanopi-openwrt/zstd-bin/zstd | sudo tee /usr/bin/zstd > /dev/null
       #     echo '${{ toJSON(github) }}' > /tmp/reviewers.json
       #     echo '${{ toJSON(github.event.repository.full_name) }}'
       #     jq -r '.event.repository.html_url' /tmp/reviewers.json
@@ -287,11 +288,11 @@ jobs:
         id: tools
         run: |
           cd $OPENWRTROOT
-          #make tools/install -j$(nproc) || make tools/install -j1 V=s
-          make toolchain/install -j$(nproc) || make toolchain/install -j1 V=s
-          make target/toolchain/install -j$(nproc)
-          #make tools/compile -j$(nproc) || tools/compile -j1 V=s
-          #make toolchain/compile -j$(nproc) || toolchain/compile -j1 V=s
+          #make tools/install -j$[`nproc`+1] || make tools/install -j1 V=s
+          make toolchain/install -j$[`nproc`+1] || make toolchain/install -j1 V=s
+          make target/toolchain/install -j$[`nproc`+1]
+          #make tools/compile -j$[`nproc`+1] || tools/compile -j1 V=s
+          #make toolchain/compile -j$[`nproc`+1] || toolchain/compile -j1 V=s
 
 
       - name: 上传错误日志
@@ -312,7 +313,6 @@ jobs:
           du -h --max-depth=1 ./build_dir
           du -h --max-depth=1 ./staging_dir
           [ -d ".ccache" ] && ccache=".ccache"
-          curl -sL https://raw.githubusercontent.com/klever1988/nanopi-openwrt/zstd-bin/zstd | sudo tee /usr/bin/zstd > /dev/null
           [ "$TOOLS_PM" = tar ] && tar --mtime=now -Jcf ../output/$TARGET_INFO-$PLATFORM-cache.tar.xz staging_dir/host* staging_dir/tool* $ccache || \
             tar --posix --use-compress-program zstdmt -cf ../output/$TARGET_INFO-$PLATFORM-cache.tzst staging_dir/host* staging_dir/tool* $ccache
           echo $CURRENT_TOOLS_HASH > ../output/$TARGET_INFO-cache.txt
@@ -324,11 +324,13 @@ jobs:
         run: |
           [ -d output ] || mkdir output
           pushd $OPENWRTROOT
-          make clean
+          make clean || true
           ./scripts/feeds clean
           rm -rf .config* bin dl logs tmp
           popd
-          mksquashfs $OPENWRTROOT output/$TARGET_INFO-$PLATFORM-cache.img -force-gid 1001 -force-uid 1001 -comp zstd
+          sudo losetup -d $(losetup -f)
+          zstdmt -c --long $REPO_FLODER.img | split --numeric=1 -b 2000m - output/$TARGET_INFO-$PLATFORM-cache.img.zst.
+          #mksquashfs $OPENWRTROOT output/$TARGET_INFO-$PLATFORM-cache.img -force-gid 1001 -force-uid 1001 -comp zstd
           echo $CURRENT_TOOLS_HASH > output/$TARGET_INFO-cache.txt
           ls -lh output
 
