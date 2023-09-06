@@ -91,7 +91,6 @@ jobs:
     - name: immortalwrt-uboot-rockchip/arm-trusted-firmware-rockchip-vendor
       id: feeds
       run: |
-        mkdir output
         sudo ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
         echo "STRDATE=$(date +%Y-%m-%d)" >>$GITHUB_ENV
         url=(
@@ -116,8 +115,10 @@ jobs:
             echo "$nn分支${zx##*/}总$op个，设置下载$xc个。第$i个$x完成"
             [[ $i = $xc ]] && break
           done
-          pushd immortalwrt && \
-          tar -zcf ../output/immortalwrt-${zx##*/}-$nn.tar.gz * --remove-files && popd
+          pushd immortalwrt
+          [[ -d ../output ]] || mkdir -p ../output
+          tar -zcf ../output/immortalwrt-${zx##*/}-$nn.tar.gz * --remove-files
+          popd
         done
         ls -la output
 
