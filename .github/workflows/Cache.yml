@@ -12,10 +12,11 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@main
 
       - name: 下载 Cache
         continue-on-error: true
+        # run: wget -qO- git.io/ql_diy
         run: wget -qO- git.io/lean_openwrt | cache_Release=true bash
 
       - name: Cache 上传到 Release
