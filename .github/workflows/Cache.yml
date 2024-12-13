@@ -21,7 +21,7 @@ jobs:
 
       - name: Cache 上传到 Release
         if: env.UPLOAD_Release == 'true'
-        uses: softprops/action-gh-release@master
+        uses: softprops/action-gh-release@v2.0.9
         with:
           name: Cache
           files: output/*
