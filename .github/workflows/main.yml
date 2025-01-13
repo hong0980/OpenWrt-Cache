@@ -91,7 +91,6 @@ jobs:
         uses: softprops/action-gh-release@v2.0.9
         with:
           files: comparison_report.txt
+          name: Makefile
+          tag_name: Makefile
           token: ${{secrets.GITHUB_TOKEN}}
-          body: immortalwrt-packages
-          tag_name: immortalwrt-packages
-          name: immortalwrt-packages
