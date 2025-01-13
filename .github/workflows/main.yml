@@ -65,6 +65,15 @@ jobs:
 
             # 提取 openwrt-24.10 分支的版本号
             version2=$(git show "$BRANCH2:$makefile" 2>/dev/null | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 2>/dev/null)
+            
+            # 如果版本号包含 '$(' 或 ')', 则清空版本号
+            if [[ "$version1" =~ \$\(.*\) ]]; then
+              version1=""
+            fi
+
+            if [[ "$version2" =~ \$\(.*\) ]]; then
+              version2=""
+            fi
 
             echo "$BRANCH1 分支的版本号: ${version1:-不存在}" | tee -a comparison_report.txt
             echo "$BRANCH2 分支的版本号: ${version2:-不存在}" | tee -a comparison_report.txt
@@ -83,6 +92,6 @@ jobs:
         with:
           files: comparison_report.txt
           token: ${{secrets.GITHUB_TOKEN}}
-          body: immortalwrt/packages
-          tag_name: immortalwrt/packages
-          name: immortalwrt/packages
+          body: immortalwrt-packages
+          tag_name: immortalwrt-packages
+          name: immortalwrt packages
