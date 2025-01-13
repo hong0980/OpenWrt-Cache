@@ -1,4 +1,4 @@
-name: 比较 OpenWRT Makefile 版本号
+name: 比较 OpenWRT Makefile 版本号并生成报告
 
 on:
   push:
@@ -42,19 +42,23 @@ jobs:
 
           # 如果没有找到任何 Makefile 文件差异，退出
           if [ -z "$makefiles" ]; then
-            echo "没有找到 Makefile 文件的差异"
+            echo "没有找到 Makefile 文件的差异" | tee comparison_report.txt
             exit 0
           fi
 
+          # 创建报告文件并输出到控制台
+          echo "OpenWRT Makefile 版本号比较报告" | tee comparison_report.txt
+          echo "=====================================" | tee -a comparison_report.txt
+
           # 遍历每个 Makefile 文件并比较版本号
           for makefile in $makefiles; do
-            echo "-------------------------------------------------"
-            echo "正在比较 $makefile:"
+            echo "-------------------------------------------------" | tee -a comparison_report.txt
+            echo "正在比较 $makefile:" | tee -a comparison_report.txt
 
             # 获取 Makefile 所在目录的上一级目录名
             package_name=$(dirname "$makefile" | xargs basename)
 
-            echo "包名: $package_name"
+            echo "包名: $package_name" | tee -a comparison_report.txt
 
             # 提取 openwrt-21.02 分支的版本号
             version1=$(git show "$BRANCH1:$makefile" | sed -En 's/^PKG_VERSION[:=](.*)/\1/p')
@@ -62,14 +66,21 @@ jobs:
             # 提取 openwrt-24.10 分支的版本号
             version2=$(git show "$BRANCH2:$makefile" | sed -En 's/^PKG_VERSION[:=](.*)/\1/p')
 
-            echo "$BRANCH1 分支的版本号: $version1"
-            echo "$BRANCH2 分支的版本号: $version2"
+            echo "$BRANCH1 分支的版本号: $version1" | tee -a comparison_report.txt
+            echo "$BRANCH2 分支的版本号: $version2" | tee -a comparison_report.txt
 
             # 比较版本号
             if [ "$version1" != "$version2" ]; then
-              echo "$package_name 包的版本号不同!"
+              echo "$package_name 包的版本号不同!" | tee -a comparison_report.txt
             else
-              echo "$package_name 包的版本号相同!"
+              echo "$package_name 包的版本号相同!" | tee -a comparison_report.txt
             fi
-            echo "-------------------------------------------------"
+            echo "-------------------------------------------------" | tee -a comparison_report.txt
           done
+
+      - name: 创建 GitHub Release 并上传报告
+        uses: softprops/action-gh-release@v1
+        with:
+          files: comparison_report.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
