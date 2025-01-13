@@ -65,7 +65,7 @@ jobs:
 
             # 提取 openwrt-24.10 分支的版本号
             version2=$(git show "$BRANCH2:$makefile" 2>/dev/null | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 2>/dev/null)
-            
+
             # 如果版本号包含 '$(' 或 ')', 则清空版本号
             if [[ "$version1" =~ \$\(.*\) ]]; then
               version1=""
@@ -88,10 +88,10 @@ jobs:
           done
 
       - name: 创建 GitHub Release 并上传报告
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2.0.9
         with:
           files: comparison_report.txt
           token: ${{secrets.GITHUB_TOKEN}}
           body: immortalwrt-packages
           tag_name: immortalwrt-packages
-          name: immortalwrt packages
+          name: immortalwrt-packages
