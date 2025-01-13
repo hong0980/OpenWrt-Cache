@@ -51,20 +51,25 @@ jobs:
             echo "-------------------------------------------------"
             echo "正在比较 $makefile:"
 
+            # 获取 Makefile 所在目录的上一级目录名
+            package_name=$(dirname "$makefile" | xargs basename)
+
+            echo "包名: $package_name"
+
             # 提取 openwrt-21.02 分支的版本号
-            version1=$(git show "$BRANCH1:$makefile" | grep -oP "(?<=^VERSION\s*=\s*)\S+")
+            version1=$(git show "$BRANCH1:$makefile" | awk -F':=' '/^PKG_VERSION/ {gsub(/^[ \t]+|[ \t]+$/, "", \$2); print \$2}')
 
             # 提取 openwrt-24.10 分支的版本号
-            version2=$(git show "$BRANCH2:$makefile" | grep -oP "(?<=^VERSION\s*=\s*)\S+")
+            version2=$(git show "$BRANCH2:$makefile" | awk -F':=' '/^PKG_VERSION/ {gsub(/^[ \t]+|[ \t]+$/, "", \$2); print \$2}')
 
             echo "$BRANCH1 分支的版本号: $version1"
             echo "$BRANCH2 分支的版本号: $version2"
 
             # 比较版本号
             if [ "$version1" != "$version2" ]; then
-              echo "版本号不同!"
+              echo "$package_name 包的版本号不同!"
             else
-              echo "版本号相同!"
+              echo "$package_name 包的版本号相同!"
             fi
             echo "-------------------------------------------------"
           done
