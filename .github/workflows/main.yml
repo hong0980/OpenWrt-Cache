@@ -61,10 +61,10 @@ jobs:
             echo "包名: $package_name" | tee -a comparison_report.txt
 
             # 提取 openwrt-21.02 分支的版本号
-            version1=$(git show "$BRANCH1:$makefile" 1>/dev/null 2>&1 | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 1>/dev/null 2>&1)
+            version1=$(git show "$BRANCH1:$makefile" 2>/dev/null | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 2>/dev/null)
 
             # 提取 openwrt-24.10 分支的版本号
-            version2=$(git show "$BRANCH2:$makefile" 1>/dev/null 2>&1 | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 1>/dev/null 2>&1)
+            version2=$(git show "$BRANCH2:$makefile" 2>/dev/null | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 2>/dev/null)
 
             echo "$BRANCH1 分支的版本号: ${version1:-不存在}" | tee -a comparison_report.txt
             echo "$BRANCH2 分支的版本号: ${version2:-不存在}" | tee -a comparison_report.txt
