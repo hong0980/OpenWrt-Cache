@@ -57,10 +57,10 @@ jobs:
             echo "包名: $package_name"
 
             # 提取 openwrt-21.02 分支的版本号
-            version1=$(git show "$BRANCH1:$makefile" | awk -F':=' '/^PKG_VERSION/ {gsub(/^[ \t]+|[ \t]+$/, "", \$2); print \$2}')
+            version1=$(git show "$BRANCH1:$makefile" | sed -En 's/^PKG_VERSION[:=](.*)/\1/p')
 
             # 提取 openwrt-24.10 分支的版本号
-            version2=$(git show "$BRANCH2:$makefile" | awk -F':=' '/^PKG_VERSION/ {gsub(/^[ \t]+|[ \t]+$/, "", \$2); print \$2}')
+            version2=$(git show "$BRANCH2:$makefile" | sed -En 's/^PKG_VERSION[:=](.*)/\1/p')
 
             echo "$BRANCH1 分支的版本号: $version1"
             echo "$BRANCH2 分支的版本号: $version2"
