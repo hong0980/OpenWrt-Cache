@@ -25,8 +25,6 @@ jobs:
           # 设置分支名称
           BRANCH1="openwrt-21.02"
           BRANCH2="openwrt-24.10"
-          mkdir output
-          echo "" > output/22
           
           # 克隆 ImmortalWrt 仓库
           git clone https://github.com/immortalwrt/packages
@@ -44,23 +42,23 @@ jobs:
 
           # 如果没有找到任何 Makefile 文件差异，退出
           if [ -z "$makefiles" ]; then
-            echo "没有找到 Makefile 文件的差异" | tee output/comparison_report.txt
+            echo "没有找到 Makefile 文件的差异" | tee ../comparison_report.txt
             exit 0
           fi
 
           # 创建报告文件并输出到控制台
-          echo "OpenWRT Makefile 版本号比较报告" | tee output/comparison_report.txt
-          echo "=====================================" | tee -a output/comparison_report.txt
+          echo "OpenWRT Makefile 版本号比较报告" | tee ../comparison_report.txt
+          echo "=====================================" | tee -a ../comparison_report.txt
 
           # 遍历每个 Makefile 文件并比较版本号
           for makefile in $makefiles; do
-            echo "-------------------------------------------------" | tee -a output/comparison_report.txt
-            echo "正在比较 $makefile:" | tee -a output/comparison_report.txt
+            echo "-------------------------------------------------" | tee -a ../comparison_report.txt
+            echo "正在比较 $makefile:" | tee -a ../comparison_report.txt
 
             # 获取 Makefile 所在目录的上一级目录名
             package_name=$(dirname "$makefile" | xargs basename)
 
-            echo "包名: $package_name" | tee -a output/comparison_report.txt
+            echo "包名: $package_name" | tee -a ../comparison_report.txt
 
             # 提取 openwrt-21.02 分支的版本号
             version1=$(git show "$BRANCH1:$makefile" 2>/dev/null | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 2>/dev/null)
@@ -77,22 +75,22 @@ jobs:
               version2=""
             fi
 
-            echo "$BRANCH1 分支的版本号: ${version1:-不存在}" | tee -a output/comparison_report.txt
-            echo "$BRANCH2 分支的版本号: ${version2:-不存在}" | tee -a output/comparison_report.txt
+            echo "$BRANCH1 分支的版本号: ${version1:-不存在}" | tee -a ../comparison_report.txt
+            echo "$BRANCH2 分支的版本号: ${version2:-不存在}" | tee -a ../comparison_report.txt
 
             # 比较版本号
             if [ "$version1" != "$version2" ]; then
-              echo "$package_name 包的版本号不同!" | tee -a output/comparison_report.txt
+              echo "$package_name 包的版本号不同!" | tee -a ../comparison_report.txt
             else
-              echo "$package_name 包的版本号相同!" | tee -a output/comparison_report.txt
+              echo "$package_name 包的版本号相同!" | tee -a ../comparison_report.txt
             fi
-            echo "-------------------------------------------------" | tee -a output/comparison_report.txt
+            echo "-------------------------------------------------" | tee -a ../comparison_report.txt
           done
 
       - name: 创建 GitHub Release 并上传报告
         uses: softprops/action-gh-release@v2.0.9
         with:
-          files: output/*
+          files: comparison_report.txt
           token: ${{secrets.GITHUB_TOKEN}}
           body: immortalwrt-packages
           tag_name: immortalwrt-packages
