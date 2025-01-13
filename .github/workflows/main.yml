@@ -61,13 +61,13 @@ jobs:
             echo "包名: $package_name" | tee -a comparison_report.txt
 
             # 提取 openwrt-21.02 分支的版本号
-            version1=$(git show "$BRANCH1:$makefile" | sed -En 's/^PKG_VERSION[:=](.*)/\1/p')
+            version1=$(git show "$BRANCH1:$makefile" 1>/dev/null 2>&1 | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 1>/dev/null 2>&1)
 
             # 提取 openwrt-24.10 分支的版本号
-            version2=$(git show "$BRANCH2:$makefile" | sed -En 's/^PKG_VERSION[:=](.*)/\1/p')
+            version2=$(git show "$BRANCH2:$makefile" 1>/dev/null 2>&1 | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 1>/dev/null 2>&1)
 
-            echo "$BRANCH1 分支的版本号: $version1" | tee -a comparison_report.txt
-            echo "$BRANCH2 分支的版本号: $version2" | tee -a comparison_report.txt
+            echo "$BRANCH1 分支的版本号: ${version1:-不存在}" | tee -a comparison_report.txt
+            echo "$BRANCH2 分支的版本号: ${version2:-不存在}" | tee -a comparison_report.txt
 
             # 比较版本号
             if [ "$version1" != "$version2" ]; then
@@ -82,5 +82,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: comparison_report.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{secrets.GITHUB_TOKEN}}
+          body: immortalwrt/packages
+          tag_name: immortalwrt/packages
+          name: immortalwrt/packages
