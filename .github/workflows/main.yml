@@ -1,12 +1,26 @@
 name: 比较 OpenWRT Makefile 版本号并生成报告
 
+permissions:
+  contents: write  # 需要写权限来创建发布
+  id-token: write  # 如果需要身份令牌的写权限（可选）
+
 on:
-  push:
-    branches:
-      - master  # 或者你希望触发的其他分支
-  pull_request:
-    branches:
-      - master  # 或者你希望触发的其他分支
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: 'Git 仓库地址'
+        required: true
+        default: 'https://github.com/immortalwrt/packages'
+      branch1:
+        description: '第一个分支名称'
+        required: true
+        default: 'openwrt-21.02'
+        options: [ openwrt-21.02, openwrt-23.05, openwrt-24.10, master, openwrt-18.06-k5.4, openwrt-18.06 ]
+      branch2:
+        description: '第二个分支名称'
+        required: true
+        default: 'openwrt-24.10'
+        options: [ openwrt-21.02, openwrt-23.05, openwrt-24.10, master, openwrt-18.06-k5.4, openwrt-18.06 ]
 
 jobs:
   compare_versions:
@@ -22,69 +36,69 @@ jobs:
 
       - name: 比较 Makefile 版本号
         run: |
-          # 设置分支名称
-          BRANCH1="openwrt-21.02"
-          BRANCH2="openwrt-24.10"
+          REPO_URL="${{ github.event.inputs.repo_url }}"
+          BRANCH1="${{ github.event.inputs.branch1 }}"
+          BRANCH2="${{ github.event.inputs.branch2 }}"
           
-          # 克隆 ImmortalWrt 仓库
-          git clone https://github.com/immortalwrt/packages
-          cd packages
+          # 克隆用户指定的仓库
+          git clone -q "$REPO_URL"
+          REPO_NAME=$(basename "$REPO_URL" .git)
+          cd "$REPO_NAME"
 
-          # 拉取远程的 openwrt-21.02 和 openwrt-24.10 分支
+          # 拉取远程的分支
           git fetch origin
           git checkout "$BRANCH1"
           git pull origin "$BRANCH1"
           git checkout "$BRANCH2"
           git pull origin "$BRANCH2"
 
-          # 获取两个分支中所有 Makefile 文件的差异
-          makefiles=$(git diff --name-only "$BRANCH1".."$BRANCH2" -- '**/Makefile')
-
-          # 如果没有找到任何 Makefile 文件差异，退出
-          if [ -z "$makefiles" ]; then
-            echo "没有找到 Makefile 文件的差异" | tee ../comparison_report.txt
-            exit 0
-          fi
-
+          # 设置要比较的目录（例如 net 和 lang 目录）
+          dirs_to_compare=("net" "lang" "utils" "kernel" "libs")
+          
           # 创建报告文件并输出到控制台
           echo "OpenWRT Makefile 版本号比较报告" | tee ../comparison_report.txt
           echo "=====================================" | tee -a ../comparison_report.txt
 
-          # 遍历每个 Makefile 文件并比较版本号
-          for makefile in $makefiles; do
-            echo "-------------------------------------------------" | tee -a ../comparison_report.txt
-            echo "正在比较 $makefile:" | tee -a ../comparison_report.txt
+          # 遍历每个目录，比较其中的 Makefile 文件
+          for dir in "${dirs_to_compare[@]}"; do
+            # 获取指定目录下的所有 Makefile 文件
+            makefiles=$(git diff --name-only "$BRANCH1".."$BRANCH2" -- "$dir/**/Makefile")
 
-            # 获取 Makefile 所在目录的上一级目录名
-            package_name=$(dirname "$makefile" | xargs basename)
+            for makefile in $makefiles; do
+              echo "-------------------------------------------------" | tee -a ../comparison_report.txt
+              echo "正在比较 $makefile:" | tee -a ../comparison_report.txt
 
-            echo "包名: $package_name" | tee -a ../comparison_report.txt
+              # 获取 Makefile 所在目录的上一级目录名
+              package_name=$(dirname "$makefile" | xargs basename)
 
-            # 提取 openwrt-21.02 分支的版本号
-            version1=$(git show "$BRANCH1:$makefile" 2>/dev/null | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 2>/dev/null)
+              echo "包名: $package_name" | tee -a ../comparison_report.txt
 
-            # 提取 openwrt-24.10 分支的版本号
-            version2=$(git show "$BRANCH2:$makefile" 2>/dev/null | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 2>/dev/null)
+              # 提取 openwrt-21.02 分支的版本号
+              version1=$(git show "$BRANCH1:$makefile" 2>/dev/null | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 2>/dev/null)
 
-            # 如果版本号包含 '$(' 或 ')', 则清空版本号
-            if [[ "$version1" =~ \$\(.*\) ]]; then
-              version1=""
-            fi
+              # 提取 openwrt-24.10 分支的版本号
+              version2=$(git show "$BRANCH2:$makefile" 2>/dev/null | sed -En 's/^PKG_VERSION:[=](.*)/\1/p' 2>/dev/null)
 
-            if [[ "$version2" =~ \$\(.*\) ]]; then
-              version2=""
-            fi
+              # 如果版本号包含 '$(' 或 ')', 则清空版本号
+              if [[ "$version1" =~ \$\(.*\) ]]; then
+                version1=""
+              fi
 
-            echo "$BRANCH1 分支的版本号: ${version1:-不存在}" | tee -a ../comparison_report.txt
-            echo "$BRANCH2 分支的版本号: ${version2:-不存在}" | tee -a ../comparison_report.txt
+              if [[ "$version2" =~ \$\(.*\) ]]; then
+                version2=""
+              fi
 
-            # 比较版本号
-            if [ "$version1" != "$version2" ]; then
-              echo "$package_name 包的版本号不同!" | tee -a ../comparison_report.txt
-            else
-              echo "$package_name 包的版本号相同!" | tee -a ../comparison_report.txt
-            fi
-            echo "-------------------------------------------------" | tee -a ../comparison_report.txt
+              echo "$BRANCH1 分支的版本号: ${version1:-不存在}" | tee -a ../comparison_report.txt
+              echo "$BRANCH2 分支的版本号: ${version2:-不存在}" | tee -a ../comparison_report.txt
+
+              # 比较版本号
+              if [ "$version1" != "$version2" ]; then
+                echo "$package_name 包的版本号不同!" | tee -a ../comparison_report.txt
+              else
+                echo "$package_name 包的版本号相同!" | tee -a ../comparison_report.txt
+              fi
+              echo "-------------------------------------------------" | tee -a ../comparison_report.txt
+            done
           done
 
       - name: 创建 GitHub Release 并上传报告
