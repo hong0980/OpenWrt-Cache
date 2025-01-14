@@ -64,8 +64,8 @@ jobs:
 
           git ls-files | grep 'Makefile$' | while read file; do
             if grep -qE '^PKG_VERSION:=' "$file"; then
-              version1=$(git show "$BRANCH1:$file" 2>/dev/null | sed -En 's/^(TCL_MAJOR_VERSION|GO_VERSION|PKG.*VERSION):=(.*)/\2/p' | head -n 1 | sed -r 's/.?\$(.*)//')
-              version2=$(git show "$BRANCH2:$file" 2>/dev/null | sed -En 's/^(TCL_MAJOR_VERSION|GO_VERSION|PKG.*VERSION):=(.*)/\2/p' | head -n 1 | sed -r 's/.?\$(.*)//')
+              version1=$(git show "$BRANCH1:$file" 2>/dev/null | sed -En 's/^([TG].*_VERSION.*|PKG.*VERSION):=(.*)/\2/p' | head -n 1 | sed -r 's/.?\$(.*)//')
+              version2=$(git show "$BRANCH2:$file" 2>/dev/null | sed -En 's/^([TG].*_VERSION.*|PKG.*VERSION):=(.*)/\2/p' | head -n 1 | sed -r 's/.?\$(.*)//')
 
               { if [ "$version1" != "$version2" ]; then
                   echo "-------------------------------------------------"
