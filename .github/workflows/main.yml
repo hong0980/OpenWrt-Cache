@@ -8,7 +8,7 @@ on:
         required: true
         type: choice
         default: 'immortalwrt/packages'
-        options: [ immortalwrt/packages, immortalwrt/luci ]
+        options: [ immortalwrt/packages, immortalwrt/luci, immortalwrt/immortalwrt ]
 
       branch1:
         description: '第一个分支名称'
@@ -42,15 +42,14 @@ jobs:
       - name: 比较 Makefile 版本号
         run: |
           mkdir output
-          REPO_URL="${{ github.event.inputs.repo_url }}"
-          BRANCH1="${{ github.event.inputs.branch1 }}"
-          BRANCH2="${{ github.event.inputs.branch2 }}"
+          REPO_URL="${{github.event.inputs.repo_url}}"
+          BRANCH1="${{github.event.inputs.branch1}}"
+          BRANCH2="${{github.event.inputs.branch2}}"
           
           # 克隆用户指定的仓库
-          repo_url="https://github.com/$REPO_URL"
-          git clone -q "$repo_url"
-          REPO_NAME=$(basename "$repo_url" .git)
-          cd "$REPO_NAME"
+          [[ $REPO_URL =~ ^https?:// ]] || repo_url="https://github.com/$REPO_URL"
+          git clone -q "${repo_url:-$REPO_URL}"
+          cd "$(basename "${repo_url:-$REPO_URL}" .git)"
 
           # 拉取远程的分支
           git fetch -q origin
@@ -58,41 +57,29 @@ jobs:
           git pull -q origin "$BRANCH1"
           git checkout -q "$BRANCH2"
           git pull -q origin "$BRANCH2"
-          REPO_URL=$(echo $REPO_URL | sed 's|/|-|g')
           
           # 创建报告文件并输出到控制台
-          echo "$REPO_URL $BRANCH1 $BRANCH2 版本号比较" | tee $REPO_URL-comparison.txt
-          echo "=====================================" | tee -a $REPO_URL-comparison.txt
+          echo "$REPO_URL $BRANCH1 $BRANCH2 版本号比较" | tee comparison.txt
+          echo "=====================================" | tee -a comparison.txt
 
-          # 获取两个分支中所有 Makefile 文件的差异
-          makefiles=$(git diff --name-only "$BRANCH1".."$BRANCH2" -- '**/Makefile')
-          for makefile in $makefiles; do
+          git ls-files | grep 'Makefile$' | while read file; do
+            if grep -qE '^PKG_VERSION:=' "$file"; then
+              version1=$(git show "$BRANCH1:$file" 2>/dev/null | sed -En 's/^(TCL_MAJOR_VERSION|GO_VERSION|PKG.*VERSION):=(.*)/\2/p' | head -n 1 | sed -r 's/.?\$(.*)//')
+              version2=$(git show "$BRANCH2:$file" 2>/dev/null | sed -En 's/^(TCL_MAJOR_VERSION|GO_VERSION|PKG.*VERSION):=(.*)/\2/p' | head -n 1 | sed -r 's/.?\$(.*)//')
 
-            # 获取 Makefile 所在目录的上一级目录名
-            package_name=$(dirname "$makefile")
-
-            # 提取第一个分支的版本号
-            version1=$(git show "$BRANCH1:$makefile" 2>/dev/null | sed -En 's/^(PKG_REALVERSION|PKG_VERSION):=(.*)/\2/p' | head -n 1)
-
-            # 提取第二个分支的版本号
-            version2=$(git show "$BRANCH2:$makefile" 2>/dev/null | sed -En 's/^(PKG_REALVERSION|PKG_VERSION):=(.*)/\2/p' | head -n 1)
-
-            # 如果版本号包含 '$(' 或 ')', 则清空版本号
-            [[ "$version1" =~ \$\(.*\) ]] && version1=""
-            [[ "$version2" =~ \$\(.*\) ]] && version2=""
-
-            # 比较版本号
-            if [ "$version1" != "$version2" ]; then
-              echo "-------------------------------------------------" | tee -a $REPO_URL-comparison.txt
-              echo "包名: $package_name" | tee -a $REPO_URL-comparison.txt
-              echo "$BRANCH1 分支的版本号: ${version1:-不存在}" | tee -a $REPO_URL-comparison.txt
-              echo "$BRANCH2 分支的版本号: ${version2:-不存在}" | tee -a $REPO_URL-comparison.txt
-              echo "-------------------------------------------------" | tee -a $REPO_URL-comparison.txt
-              echo
+              { if [ "$version1" != "$version2" ]; then
+                  echo "-------------------------------------------------"
+                  echo "包名: $(dirname "$file")"
+                  echo "$BRANCH1 分支: ${version1:-不存在}"
+                  echo "$BRANCH2 分支: ${version2:-不存在}"
+                  echo "-------------------------------------------------"
+                  echo
+                fi
+              } | tee -a comparison.txt
             fi
           done
-          echo "=====================================" | tee -a $REPO_URL-comparison.txt
-          cp $REPO_URL-comparison.txt ../output
+          echo "=====================================" | tee -a comparison.txt
+          mv comparison.txt ../output/$(tr '/' '_' <<< $REPO_URL)-${BRANCH1#*-}_${BRANCH2#*-}-comparison.txt
 
       - name: 创建 GitHub Release 并上传报告
         uses: softprops/action-gh-release@v2.2.1
