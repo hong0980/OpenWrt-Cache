@@ -29,6 +29,6 @@ jobs:
         with:
           files: qinglong-2.17.4.tar.gz
           name: Docker Image
-          tag_name: Docker Image
+          tag_name: Docker_Image
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
