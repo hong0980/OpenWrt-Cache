@@ -28,5 +28,7 @@ jobs:
         uses: softprops/action-gh-release@v2.2.1
         with:
           files: qinglong-2.17.4.tar.gz
+          name: Docker Image
+          tag_name: Docker Image
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
