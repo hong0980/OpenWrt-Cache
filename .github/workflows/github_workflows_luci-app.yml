@@ -40,7 +40,9 @@ jobs:
         id: sdk
         run: |
           SDK_URL="https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          echo "开始下载SDK..."
           wget -q --show-progress $SDK_URL -O sdk.tar.xz
+          echo "解压SDK..."
           tar -xf sdk.tar.xz
           SDK_DIR=$(find . -maxdepth 1 -type d -name "openwrt-sdk-*")
           if [ -z "$SDK_DIR" ]; then
@@ -48,6 +50,7 @@ jobs:
             exit 1
           fi
           echo "SDK_DIR=$SDK_DIR" | tee -a $GITHUB_ENV
+          echo "SDK下载和解压完成"
 
       - name: 拷贝应用到 SDK 包目录
         run: |

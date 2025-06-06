@@ -1,9 +1,3 @@
-#
-# Copyright 2019-2025 sirpdboy
-#
-# This is free software, licensed under the Apache License, Version 2.0 .
-#
-
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-taskplan
@@ -17,6 +11,6 @@ define Package/$(PKG_NAME)/conffiles
 /etc/config/taskplan
 endef
 
-include $(TOPDIR)/feeds/luci/luci.mk
+include $(INCLUDE_DIR)/package.mk
 
 # call BuildPackage - OpenWrt buildroot signature
