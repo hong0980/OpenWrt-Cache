@@ -11,30 +11,43 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+
       - name: 检出代码
         uses: actions/checkout@v4
 
       - name: 自动检测 APP_NAME
         id: set_app
         run: |
+          # 检查本次 push 涉及的 luci-app-* 目录
           APP_NAME=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -oE '^luci-app-[^/]+' | sort -u | head -n1)
+          # 若没检测到，fallback 到目录自动检索
           if [ -z "$APP_NAME" ]; then
             APP_NAME=$(find . -maxdepth 1 -type d -name 'luci-app-*' | sed 's|^\./||' | head -n1)
           fi
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          if [ -z "$APP_NAME" ]; then
+            echo "❌ 未找到 luci-app-* 目录，终止流程。"
+            exit 1
+          fi
+          echo "APP_NAME=$APP_NAME" | tee -a $GITHUB_ENV
 
       - name: 安装编译依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev libncursesw5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3 python3-distutils
+          # 去除 python3-distutils，兼容 Ubuntu 22.04/24.04
+          sudo apt-get install -y build-essential libncurses5-dev libncursesw5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3
 
       - name: 下载并解压 OpenWrt SDK
+        id: sdk
         run: |
           SDK_URL="https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-          wget -q $SDK_URL -O sdk.tar.xz
+          wget -q --show-progress $SDK_URL -O sdk.tar.xz
           tar -xf sdk.tar.xz
           SDK_DIR=$(find . -maxdepth 1 -type d -name "openwrt-sdk-*")
-          echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
+          if [ -z "$SDK_DIR" ]; then
+            echo "❌ SDK 解压失败，终止流程。"
+            exit 1
+          fi
+          echo "SDK_DIR=$SDK_DIR" | tee -a $GITHUB_ENV
 
       - name: 拷贝应用到 SDK 包目录
         run: |
@@ -44,22 +57,23 @@ jobs:
         run: |
           cd $SDK_DIR
           make defconfig
-          make package/$APP_NAME/compile V=s
+          make package/$APP_NAME/compile V=s || { echo "❌ 编译失败"; exit 1; }
 
       - name: 提取版本号
         id: getver
         run: |
-          VER=$(grep -m1 '^PKG_VERSION:=' $APP_NAME/Makefile | cut -d= -f2 | tr -d ' ')
-          REL=$(grep -m1 '^PKG_RELEASE:=' $APP_NAME/Makefile | cut -d= -f2 | tr -d ' ')
-          TAG=${VER}-${REL}
-          echo "TAG=$TAG" >> $GITHUB_ENV
-          echo "TAG=$TAG"
-        env:
-          APP_NAME: ${{ env.APP_NAME }}
+          VER=$(grep -m1 '^PKG_VERSION:=' ../$APP_NAME/Makefile | cut -d= -f2 | tr -d ' ')
+          REL=$(grep -m1 '^PKG_RELEASE:=' ../$APP_NAME/Makefile | cut -d= -f2 | tr -d ' ')
+          if [ -z "$VER" ] || [ -z "$REL" ]; then
+            echo "❌ 无法从 Makefile 获取版本号，终止流程。"
+            exit 1
+          fi
+          TAG="${VER}-${REL}"
+          echo "TAG=$TAG" | tee -a $GITHUB_ENV
 
       - name: 创建 Release（如果不存在）
         id: create_release
-        uses: softprops/action-gh-release@v2.2.1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
           name: ${{ env.TAG }}
@@ -70,7 +84,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 上传 IPK 到 Release
-        uses: softprops/action-gh-release@v2.2.1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
           files: |
