@@ -63,12 +63,19 @@ jobs:
           make defconfig
           make package/$APP_NAME/compile V=s || { echo "❌ 编译失败"; exit 1; }
 
-      - name: 查找并列出 IPK 产物
+      - name: 查找单个 ipk 文件并导出变量
+        id: findipk
         run: |
-          find $SDK_DIR/bin/packages -name "${APP_NAME}_*.ipk" || true
+          IPK_PATH=$(find $SDK_DIR/bin/packages -name "${APP_NAME}_*.ipk" | head -n1)
+          echo "查找到的ipk文件: $IPK_PATH"
+          echo "IPK_PATH=$IPK_PATH" >> $GITHUB_ENV
+          if [ -z "$IPK_PATH" ]; then
+            echo "❌ 没有找到任何ipk文件，终止流程。"
+            exit 1
+          fi
 
       - name: 上传 IPK 到 Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.APP_NAME }}_ipk_${{ env.TAG }}
-          path: ${{ env.SDK_DIR }}/bin/packages/*/*/${{ env.APP_NAME }}_*.ipk
+          path: ${{ env.IPK_PATH }}
