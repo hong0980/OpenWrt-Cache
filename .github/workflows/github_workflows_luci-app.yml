@@ -1,0 +1,79 @@
+name: 自动编译并发布 luci-app-* IPK
+
+on:
+  push:
+    paths:
+      - 'luci-app-*/**'
+      - '.github/workflows/*.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 自动检测 APP_NAME
+        id: set_app
+        run: |
+          APP_NAME=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -oE '^luci-app-[^/]+' | sort -u | head -n1)
+          if [ -z "$APP_NAME" ]; then
+            APP_NAME=$(find . -maxdepth 1 -type d -name 'luci-app-*' | sed 's|^\./||' | head -n1)
+          fi
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+
+      - name: 安装编译依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev libncursesw5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3 python3-distutils
+
+      - name: 下载并解压 OpenWrt SDK
+        run: |
+          SDK_URL="https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          wget -q $SDK_URL -O sdk.tar.xz
+          tar -xf sdk.tar.xz
+          SDK_DIR=$(find . -maxdepth 1 -type d -name "openwrt-sdk-*")
+          echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
+
+      - name: 拷贝应用到 SDK 包目录
+        run: |
+          cp -r $APP_NAME $SDK_DIR/package/$APP_NAME
+
+      - name: 编译 IPK
+        run: |
+          cd $SDK_DIR
+          make defconfig
+          make package/$APP_NAME/compile V=s
+
+      - name: 提取版本号
+        id: getver
+        run: |
+          VER=$(grep -m1 '^PKG_VERSION:=' $APP_NAME/Makefile | cut -d= -f2 | tr -d ' ')
+          REL=$(grep -m1 '^PKG_RELEASE:=' $APP_NAME/Makefile | cut -d= -f2 | tr -d ' ')
+          TAG=${VER}-${REL}
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "TAG=$TAG"
+        env:
+          APP_NAME: ${{ env.APP_NAME }}
+
+      - name: 创建 Release（如果不存在）
+        id: create_release
+        uses: softprops/action-gh-release@v2.2.1
+        with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TAG }}
+          body: "自动构建 ${{ env.APP_NAME }} 版本 ${{ env.TAG }}"
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 上传 IPK 到 Release
+        uses: softprops/action-gh-release@v2.2.1
+        with:
+          tag_name: ${{ env.TAG }}
+          files: |
+            ${{ env.SDK_DIR }}/bin/packages/*/*/${{ env.APP_NAME }}_*.ipk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
