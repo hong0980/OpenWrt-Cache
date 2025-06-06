@@ -11,7 +11,7 @@ define Package/$(PKG_NAME)/conffiles
 /etc/config/taskplan
 endef
 
-include $(INCLUDE_DIR)/luci.mk
+include $(INCLUDE_DIR)/package.mk
 
 define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/www/luci-static/taskplan
