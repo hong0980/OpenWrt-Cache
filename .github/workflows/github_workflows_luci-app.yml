@@ -79,7 +79,6 @@ jobs:
           body: "自动构建 ${{ env.APP_NAME }} 版本 ${{ env.TAG }}"
           draft: false
           prerelease: false
+          token: ${{secrets.GITHUB_TOKEN}}
           files: |
             ${{ env.SDK_DIR }}/bin/packages/*/*/${{ env.APP_NAME }}_*.ipk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
