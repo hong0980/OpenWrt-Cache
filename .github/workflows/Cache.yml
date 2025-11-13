@@ -1,0 +1,59 @@
+name: 下载 Cache
+
+on:
+  schedule:
+    - cron: "0 5 */15 * *"  # 每 15 天的 05:00 UTC
+  workflow_dispatch:        # 支持手动触发
+
+jobs:
+  build:
+    name: 下载 Cache
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: 下载 Cache
+        run: |
+          set -u  # 开启未定义变量报错，安全起见
+          mkdir -p output
+
+          for page in 1 2 3 4; do
+            curl -sL "https://api.github.com/repos/hong0980/Actions-OpenWrt/releases?page=$page"
+          done | grep -oP '"browser_download_url": "\K[^"]*cache[^"]*' > xa || true
+
+          curl -sL https://api.github.com/repos/hong0980/OpenWrt-Cache/releases | \
+            grep -oP '"browser_download_url": "\K[^"]*cache[^"]*' >> xa || true
+
+          count=0
+          while IFS= read -r url; do
+            if [[ $count -ge 5 ]]; then
+              break
+            fi
+            filename="${url##*/}"
+
+            if [[ $url =~ Actions-OpenWrt ]] && ! grep -q "OpenWrt-Cache.*/$filename" xa; then
+              if wget -qO "output/$filename" "$url"; then
+                echo "$filename 已经下载完成"
+                ((count++))
+              fi
+            fi
+          done < xa || true
+
+          if [ "$(ls -A output 2>/dev/null)" ]; then
+            echo "UPLOAD_Release=true" >> $GITHUB_ENV
+          else
+            echo "没有新的 cache 可以下载！"
+          fi
+
+      - name: Cache 上传到 Release
+        if: env.UPLOAD_Release == 'true'
+        uses: softprops/action-gh-release@v2.4.2
+        with:
+          name: Cache
+          files: output/*
+          tag_name: Cache
+          token: ${{ secrets.GITHUB_TOKEN }}

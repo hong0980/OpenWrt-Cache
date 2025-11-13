@@ -1,0 +1,90 @@
+name: 版本比较
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: 'Git 仓库地址'
+        required: true
+        type: choice
+        default: 'immortalwrt/packages'
+        options: [ immortalwrt/packages, immortalwrt/luci, immortalwrt/immortalwrt ]
+
+      branch1:
+        description: '第一个分支名称'
+        required: true
+        type: choice
+        default: 'openwrt-21.02'
+        options: [ openwrt-21.02, openwrt-23.05, openwrt-24.10, master, openwrt-18.06-k5.4, openwrt-18.06 ]
+
+      branch2:
+        description: '第二个分支名称'
+        required: true
+        type: choice
+        default: 'openwrt-24.10'
+        options: [ openwrt-21.02, openwrt-23.05, openwrt-24.10, master, openwrt-18.06-k5.4, openwrt-18.06 ]
+
+jobs:
+  compare_versions:
+    runs-on: ubuntu-24.04
+    name: ${{github.event.inputs.repo_url}} ${{github.event.inputs.branch1}} ${{github.event.inputs.branch2}} 版本比较
+    permissions:
+      contents: write
+
+    steps:
+      - name: 检出代码仓库
+        uses: actions/checkout@v4.2.2
+
+      - name: 设置 Git
+        run: |
+          git fetch --all
+
+      - name: 比较 Makefile 版本号
+        run: |
+          mkdir output
+          REPO_URL="${{github.event.inputs.repo_url}}"
+          BRANCH1="${{github.event.inputs.branch1}}"
+          BRANCH2="${{github.event.inputs.branch2}}"
+
+          # 克隆用户指定的仓库
+          [[ $REPO_URL =~ ^https?:// ]] || repo_url="https://github.com/$REPO_URL"
+          git clone -q "${repo_url:-$REPO_URL}"
+          cd "$(basename "${repo_url:-$REPO_URL}" .git)"
+
+          # 拉取远程的分支
+          git fetch -q origin
+          git checkout -q "$BRANCH1"
+          git pull -q origin "$BRANCH1"
+          git checkout -q "$BRANCH2"
+          git pull -q origin "$BRANCH2"
+
+          # 创建报告文件并输出到控制台
+          echo "$REPO_URL $BRANCH1 $BRANCH2 版本号比较" | tee comparison.txt
+          echo "=====================================" | tee -a comparison.txt
+
+          git ls-files | grep 'Makefile$' | while read file; do
+            if grep -qE '^PKG_VERSION:=' "$file"; then
+              version1=$(git show "$BRANCH1:$file" 2>/dev/null | sed -En 's/^([TG].*_VERSION.*|PKG.*VERSION):=(.*)/\2/p' | head -n 1 | sed -r 's/.?\$(.*)//')
+              version2=$(git show "$BRANCH2:$file" 2>/dev/null | sed -En 's/^([TG].*_VERSION.*|PKG.*VERSION):=(.*)/\2/p' | head -n 1 | sed -r 's/.?\$(.*)//')
+
+              { if [ "$version1" != "$version2" ]; then
+                  echo "-------------------------------------------------"
+                  echo "包名: $(dirname "$file")"
+                  echo "$BRANCH1 分支: ${version1:-不存在}"
+                  echo "$BRANCH2 分支: ${version2:-不存在}"
+                  echo "-------------------------------------------------"
+                  echo
+                fi
+              } | tee -a comparison.txt
+            fi
+          done
+          echo "=====================================" | tee -a comparison.txt
+          mv comparison.txt ../output/$(tr '/' '_' <<< $REPO_URL)-${BRANCH1#*-}_${BRANCH2#*-}-comparison.txt
+
+      - name: 创建 GitHub Release 并上传报告
+        uses: softprops/action-gh-release@v2.2.2
+        with:
+          files: output/*
+          name: 比较版本
+          tag_name: comparison
+          token: ${{secrets.GITHUB_TOKEN}}
